@@ -7,6 +7,11 @@ Paperless discovers `GOSTCMSParser` through the `paperless_ngx.parsers` entry
 point. The original `.p7m` or `.sig` file remains the original document; its
 embedded PDF is supplied as the PDF rendition.
 
+### Note for humans
+
+This plugin was fully vibe-coded by Codex using 5.6-terra (high effort) on 2026-08-24.
+No warranty for broken documents. 
+
 ### Docker Compose installation
 
 This package is not published to a package index. Build a local wheel from
