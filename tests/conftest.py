@@ -8,6 +8,10 @@ from pathlib import Path
 source = os.environ.get("PAPERLESS_NGX_SRC")
 if source:
     sys.path.insert(0, source)
+else:
+    from paperless_stubs import install_paperless_stubs
+
+    install_paperless_stubs()
 
 from django.conf import settings
 
