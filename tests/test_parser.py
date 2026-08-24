@@ -176,6 +176,54 @@ def test_gost_zip_pdf_p7s_bundle_scores_parses_and_extracts_metadata(
 
 
 @pytest.mark.parametrize(
+    ("mime_type", "suffix"),
+    [
+        ("application/octet-stream", ".p7m"),
+        ("application/zip", ".zip"),
+    ],
+)
+@pytest.mark.parametrize(
+    "parse_first",
+    [True, False],
+    ids=["after-parse", "before-parse"],
+)
+def test_thumbnail_uses_extracted_pdf_rendition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mime_type: str,
+    suffix: str,
+    parse_first: bool,
+) -> None:
+    source = tmp_path / f"source{suffix}"
+    pdf = b"%PDF-1.7\nsynthetic document\n%%EOF\n"
+    source.write_bytes(
+        _zip({"2024.pdf": pdf, "2024.p7s": _cms(None)})
+        if mime_type == "application/zip"
+        else _cms(pdf),
+    )
+    thumbnail = tmp_path / "thumbnail.webp"
+    calls: list[tuple[Path, Path]] = []
+
+    def render(pdf_path: Path, temp_dir: Path) -> Path:
+        calls.append((pdf_path, temp_dir))
+        return thumbnail
+
+    monkeypatch.setattr("paperless_gost.parser.make_thumbnail_from_pdf", render)
+
+    with GOSTCMSParser() as parser:
+        if parse_first:
+            parser.parse(source, mime_type)
+        else:
+            assert parser.get_archive_path() is None
+        assert parser.get_thumbnail(source, mime_type) == thumbnail
+        archive = parser.get_archive_path()
+
+        assert archive is not None
+        assert archive.read_bytes() == pdf
+        assert calls == [(archive, parser._tempdir)]
+
+
+@pytest.mark.parametrize(
     "case",
     [
         "missing_pair",

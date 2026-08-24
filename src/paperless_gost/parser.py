@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from asn1crypto import cms, x509
 from django.conf import settings
-from documents.parsers import ParseError, get_default_thumbnail
+from documents.parsers import ParseError, make_thumbnail_from_pdf
 from paperless.parsers import MetadataEntry, ParserContext
 
 if TYPE_CHECKING:
@@ -155,9 +155,9 @@ class GOSTCMSParser:
         return self._archive_path
 
     def get_thumbnail(self, document_path: Path, mime_type: str) -> Path:
-        thumbnail = self._tempdir / "thumbnail.webp"
-        shutil.copyfile(get_default_thumbnail(), thumbnail)
-        return thumbnail
+        if self._archive_path is None:
+            self.parse(document_path, mime_type)
+        return make_thumbnail_from_pdf(self._archive_path, self._tempdir)
 
     def get_page_count(self, document_path: Path, mime_type: str) -> int | None:
         return None

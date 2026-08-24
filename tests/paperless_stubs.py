@@ -56,12 +56,17 @@ def get_default_thumbnail() -> Path:
     return Path(__file__)
 
 
+def make_thumbnail_from_pdf(in_path: Path, temp_dir: Path) -> Path:
+    return temp_dir / "thumbnail.webp"
+
+
 def install_paperless_stubs() -> None:
     documents = ModuleType("documents")
     documents.__path__ = []
     document_parsers = ModuleType("documents.parsers")
     document_parsers.ParseError = ParseError
     document_parsers.get_default_thumbnail = get_default_thumbnail
+    document_parsers.make_thumbnail_from_pdf = make_thumbnail_from_pdf
     paperless = ModuleType("paperless")
     paperless.__path__ = []
     paperless_parsers = ModuleType("paperless.parsers")
