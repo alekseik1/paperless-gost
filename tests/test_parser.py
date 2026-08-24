@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import datetime
+import zipfile
 from importlib.metadata import entry_points
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -78,6 +80,179 @@ def test_attached_gost_cms_pdf_scores_parses_and_extracts_metadata(
             "value": "Common Name: Synthetic Issuer",
         },
     ]
+
+
+@pytest.mark.parametrize(
+    ("mime_type", "filename"),
+    [
+        ("application/octet-stream", "invoice.p7m"),
+        ("application/octet-stream", "invoice.P7M"),
+        ("application/octet-stream", "signature.sig"),
+        ("application/octet-stream", "signature.SIG"),
+        ("application/octet-stream", ""),
+        ("application/pkcs7-mime", "upload.bin"),
+        ("application/pkcs7-signature", "upload.bin"),
+        ("application/x-pkcs7-mime", "upload.bin"),
+        ("application/x-pkcs7-signature", "upload.bin"),
+        ("application/zip", "bundle.zip"),
+        ("application/zip", "BUNDLE.ZIP"),
+        ("application/zip", ""),
+    ],
+)
+def test_upload_precheck_accepts_potential_gost_cms_uploads(
+    mime_type: str,
+    filename: str,
+) -> None:
+    assert GOSTCMSParser.score(mime_type, filename) == 100
+
+
+def test_upload_precheck_rejects_arbitrary_named_binary() -> None:
+    assert GOSTCMSParser.score("application/octet-stream", "upload.bin") is None
+    assert GOSTCMSParser.score("application/zip", "upload.bin") is None
+
+
+def test_gost_zip_pdf_p7s_bundle_scores_parses_and_extracts_metadata(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "2024.zip"
+    pdf = b"%PDF-1.7\nsynthetic document\n%%EOF\n"
+    source.write_bytes(
+        _zip(
+            {
+                "./2024.pdf": pdf,
+                "./2024.p7s": _cms(None),
+                "./2024.xml": b"ignored metadata",
+                "ignored.txt": b"ignored",
+            },
+        ),
+    )
+
+    assert GOSTCMSParser.score("application/zip", source.name, source) == 100
+    with GOSTCMSParser() as parser:
+        parser.parse(source, "application/zip")
+        archive = parser.get_archive_path()
+        assert archive is not None
+        assert archive.read_bytes() == pdf
+        metadata = parser.extract_metadata(source, "application/zip")
+
+    assert metadata == [
+        {
+            "namespace": "https://github.com/alekseik1/paperless-gost",
+            "prefix": "gost",
+            "key": "verification",
+            "value": "Not performed; cryptographic validity was not assessed.",
+        },
+        {
+            "namespace": "https://github.com/alekseik1/paperless-gost",
+            "prefix": "gost",
+            "key": "gost_algorithm_oids",
+            "value": "1.2.643.7.1.1.2.2, 1.2.643.7.1.1.3.2",
+        },
+        {
+            "namespace": "https://github.com/alekseik1/paperless-gost",
+            "prefix": "gost",
+            "key": "signing_time",
+            "value": "2024-01-02T03:04:05+00:00",
+        },
+        {
+            "namespace": "https://github.com/alekseik1/paperless-gost",
+            "prefix": "gost",
+            "key": "signature_algorithm",
+            "value": "1.2.643.7.1.1.3.2",
+        },
+        {
+            "namespace": "https://github.com/alekseik1/paperless-gost",
+            "prefix": "gost",
+            "key": "signer_subject",
+            "value": "Common Name: Synthetic Signer",
+        },
+        {
+            "namespace": "https://github.com/alekseik1/paperless-gost",
+            "prefix": "gost",
+            "key": "signer_issuer",
+            "value": "Common Name: Synthetic Issuer",
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing_pair",
+        "invalid_p7s",
+        "non_pdf",
+        "multiple_pairs",
+        "ambiguous_pair",
+        "duplicate_p7s",
+        "cross_directory_stem",
+    ],
+)
+def test_invalid_or_ambiguous_gost_zip_is_not_claimed(
+    tmp_path: Path,
+    case: str,
+) -> None:
+    source = tmp_path / "invalid.zip"
+    pdf = b"%PDF-1.7\n%%EOF\n"
+    members = {
+        "2024.pdf": pdf,
+        "2024.p7s": _cms(None),
+    }
+    if case == "missing_pair":
+        members.pop("2024.p7s")
+    elif case == "invalid_p7s":
+        members["2024.p7s"] = b"not CMS"
+    elif case == "non_pdf":
+        members["2024.pdf"] = b"not a PDF"
+    elif case == "multiple_pairs":
+        members.update({"2025.pdf": pdf, "2025.p7s": _cms(None)})
+    elif case == "ambiguous_pair":
+        members = [
+            ("2024.pdf", pdf),
+            ("2024.pdf", pdf),
+            ("2024.p7s", _cms(None)),
+        ]
+    elif case == "duplicate_p7s":
+        members = [
+            ("2024.pdf", pdf),
+            ("2024.p7s", _cms(None)),
+            ("2024.p7s", _cms(None)),
+        ]
+    elif case == "cross_directory_stem":
+        members = {"a/2024.pdf": pdf, "b/2024.p7s": _cms(None)}
+    source.write_bytes(_zip(members))
+
+    assert GOSTCMSParser.score("application/zip", source.name, source) is None
+
+
+def test_corrupt_compressed_zip_member_is_normalized_at_public_boundaries(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "corrupt.zip"
+    archive = _zip(
+        {"2024.pdf": b"%PDF-1.7\n%%EOF\n", "2024.p7s": _cms(None)},
+        compression=zipfile.ZIP_DEFLATED,
+    )
+    member = zipfile.ZipFile(BytesIO(archive)).getinfo("2024.pdf")
+    compressed_data_offset = member.header_offset + 30 + len(member.filename)
+    corrupt_archive = bytearray(archive)
+    corrupt_archive[compressed_data_offset] ^= 0xFF
+    source.write_bytes(corrupt_archive)
+
+    assert GOSTCMSParser.score("application/zip", source.name, source) is None
+    with GOSTCMSParser() as parser:
+        with pytest.raises(ParseError, match="Unable to read GOST CMS document"):
+            parser.parse(source, "application/zip")
+        assert parser.extract_metadata(source, "application/zip") == []
+
+
+def test_malformed_actual_p7m_is_not_claimed_after_upload_precheck(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "malformed.p7m"
+    source.write_bytes(b"not CMS")
+
+    assert GOSTCMSParser.score("application/octet-stream", source.name) == 100
+    assert GOSTCMSParser.score("application/octet-stream", source.name, source) is None
 
 
 def test_arbitrary_binary_and_unsigned_pdf_are_not_claimed(tmp_path: Path) -> None:
@@ -303,6 +478,20 @@ def _cms(
         },
     )
     return cms.ContentInfo({"content_type": "signed_data", "content": signed_data}).dump()
+
+
+def _zip(
+    members: dict[str, bytes] | list[tuple[str, bytes]],
+    *,
+    compression: int = zipfile.ZIP_STORED,
+) -> bytes:
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=compression) as archive:
+        for filename, content in (
+            members.items() if isinstance(members, dict) else members
+        ):
+            archive.writestr(filename, content)
+    return buffer.getvalue()
 
 
 def _signer_info(

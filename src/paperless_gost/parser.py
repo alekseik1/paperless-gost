@@ -3,6 +3,8 @@ from __future__ import annotations
 import datetime
 import shutil
 import tempfile
+import zipfile
+import zlib
 from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING
@@ -22,6 +24,7 @@ _SUPPORTED_MIME_TYPES = {
     "application/pkcs7-signature": ".sig",
     "application/x-pkcs7-mime": ".p7m",
     "application/x-pkcs7-signature": ".sig",
+    "application/zip": ".zip",
 }
 _GOST_DIGEST_ALGORITHM_OIDS = frozenset(
     {
@@ -80,11 +83,22 @@ class GOSTCMSParser:
         filename: str,
         path: Path | None = None,
     ) -> int | None:
-        if mime_type not in _SUPPORTED_MIME_TYPES or path is None:
+        if mime_type not in _SUPPORTED_MIME_TYPES:
             return None
+        if path is None:
+            suffixes = {
+                "application/octet-stream": (".p7m", ".sig"),
+                "application/zip": (".zip",),
+            }.get(mime_type)
+            if suffixes and filename and not filename.lower().endswith(suffixes):
+                return None
+            return 100
         try:
+            if mime_type == "application/zip":
+                _load_gost_zip_bundle(path)
+                return 100
             return 100 if _is_gost_signed_data(path.read_bytes()) else None
-        except OSError:
+        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, zlib.error):
             return None
 
     @property
@@ -106,12 +120,21 @@ class GOSTCMSParser:
         produce_archive: bool = True,
     ) -> None:
         try:
-            signed_data = _load_gost_signed_data(document_path.read_bytes())
-        except (OSError, ValueError) as error:
+            if mime_type == "application/zip":
+                content, signed_data = _load_gost_zip_bundle(document_path)
+            else:
+                signed_data = _load_gost_signed_data(document_path.read_bytes())
+                encapsulated_content = signed_data["encap_content_info"]["content"]
+                content = encapsulated_content.native
+        except (
+            OSError,
+            ValueError,
+            zipfile.BadZipFile,
+            RuntimeError,
+            zlib.error,
+        ) as error:
             raise ParseError(f"Unable to read GOST CMS document: {error}") from error
 
-        encapsulated_content = signed_data["encap_content_info"]["content"]
-        content = encapsulated_content.native
         if content is None:
             raise ParseError(
                 "Detached CMS/CAdES signatures are unsupported: no encapsulated PDF is present.",
@@ -145,8 +168,12 @@ class GOSTCMSParser:
         mime_type: str,
     ) -> list[MetadataEntry]:
         try:
-            return _metadata(_load_gost_signed_data(document_path.read_bytes()))
-        except (OSError, ValueError):
+            if mime_type == "application/zip":
+                _, signed_data = _load_gost_zip_bundle(document_path)
+            else:
+                signed_data = _load_gost_signed_data(document_path.read_bytes())
+            return _metadata(signed_data)
+        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, zlib.error):
             return []
 
 
@@ -174,6 +201,37 @@ def _is_gost_signed_data(data: bytes) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _load_gost_zip_bundle(path: Path) -> tuple[bytes, cms.SignedData]:
+    with zipfile.ZipFile(path) as archive:
+        pdf_members: dict[str, list[zipfile.ZipInfo]] = {}
+        p7s_members: dict[str, list[zipfile.ZipInfo]] = {}
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            member_path = Path(member.filename)
+            member_suffix = member_path.suffix.lower()
+            if member_suffix == ".pdf":
+                pdf_members.setdefault(str(member_path.with_suffix("")), []).append(member)
+            elif member_suffix == ".p7s":
+                p7s_members.setdefault(str(member_path.with_suffix("")), []).append(member)
+
+        matching_stems = pdf_members.keys() & p7s_members.keys()
+        if any(
+            len(pdf_members[stem]) != 1 or len(p7s_members[stem]) != 1
+            for stem in matching_stems
+        ):
+            raise ValueError("ZIP contains an ambiguous PDF/P7S pair")
+        pairs = [(pdf_members[stem][0], p7s_members[stem][0]) for stem in matching_stems]
+        if len(pairs) != 1:
+            raise ValueError("ZIP does not contain exactly one matching PDF/P7S pair")
+
+        pdf_member, p7s_member = pairs[0]
+        pdf = archive.read(pdf_member)
+        if not pdf.startswith(b"%PDF-"):
+            raise ValueError("ZIP PDF member is not a PDF")
+        return pdf, _load_gost_signed_data(archive.read(p7s_member))
 
 
 def _gost_algorithm_oids(signed_data: cms.SignedData) -> list[str]:
