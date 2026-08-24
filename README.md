@@ -74,3 +74,7 @@ validity. It does not provide a GOST crypto backend, trust-chain or revocation
 checks, timestamp validation, or any assertion that a signature is valid. When
 present, signing time, signer subject/issuer, and GOST/signature algorithm
 identifiers are exposed as unverified metadata.
+
+## License
+
+Licensed under the [GNU General Public License v3.0 or later](LICENSE).

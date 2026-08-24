@@ -3,6 +3,8 @@ name = "paperless-gost"
 version = "0.1.0"
 description = "Paperless-ngx parser for attached GOST CMS/CAdES PDF documents"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [
     { name = "alekseik1", email = "1alekseik1@gmail.com" }
 ]
