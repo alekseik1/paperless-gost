@@ -22,4 +22,7 @@ test *args:
 build:
     uv build
 
+release:
+    uv run semantic-release version
+
 ci: lint typecheck test build

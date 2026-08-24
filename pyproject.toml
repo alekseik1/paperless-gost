@@ -21,9 +21,18 @@ dev = [
     "django~=5.2.13",
     "pillow>=12.0",
     "pytest>=9.0",
+    "python-semantic-release>=10.6.1",
     "ruff>=0.14",
     "ty>=0.0.74",
 ]
+
+[tool.semantic_release]
+allow_zero_version = true
+branch = "main"
+build_command = "uv lock --upgrade-package paperless-gost && git add uv.lock && uv build"
+commit_message = "chore(release): {version}"
+commit_parser = "conventional"
+version_toml = ["pyproject.toml:project.version"]
 
 [tool.ruff]
 line-length = 120
