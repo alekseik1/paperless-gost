@@ -13,7 +13,7 @@ else:
 
     install_paperless_stubs()
 
-from django.conf import settings
+from django.conf import settings  # noqa: E402
 
 if not settings.configured:
     scratch_dir = Path(tempfile.mkdtemp(prefix="paperless-gost-tests-"))

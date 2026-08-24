@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 from asn1crypto import cms, x509
 from django.conf import settings
-from documents.parsers import ParseError, make_thumbnail_from_pdf
-from paperless.parsers import MetadataEntry, ParserContext
+from documents.parsers import ParseError, make_thumbnail_from_pdf  # ty: ignore[unresolved-import]
+from paperless.parsers import MetadataEntry, ParserContext  # ty: ignore[unresolved-import]
 
 if TYPE_CHECKING:
     from typing import Self
@@ -187,8 +187,7 @@ def _load_gost_signed_data(data: bytes) -> cms.SignedData:
     signed_data = content_info["content"]
     signer_infos = signed_data["signer_infos"]
     if not signer_infos or any(
-        signer_info["signature_algorithm"]["algorithm"].dotted
-        not in _GOST_SIGNATURE_ALGORITHM_OIDS
+        signer_info["signature_algorithm"]["algorithm"].dotted not in _GOST_SIGNATURE_ALGORITHM_OIDS
         for signer_info in signer_infos
     ):
         raise ValueError("CMS SignedData does not contain a supported GOST signer")
@@ -218,10 +217,7 @@ def _load_gost_zip_bundle(path: Path) -> tuple[bytes, cms.SignedData]:
                 p7s_members.setdefault(str(member_path.with_suffix("")), []).append(member)
 
         matching_stems = pdf_members.keys() & p7s_members.keys()
-        if any(
-            len(pdf_members[stem]) != 1 or len(p7s_members[stem]) != 1
-            for stem in matching_stems
-        ):
+        if any(len(pdf_members[stem]) != 1 or len(p7s_members[stem]) != 1 for stem in matching_stems):
             raise ValueError("ZIP contains an ambiguous PDF/P7S pair")
         pairs = [(pdf_members[stem][0], p7s_members[stem][0]) for stem in matching_stems]
         if len(pairs) != 1:
@@ -250,8 +246,7 @@ def _gost_signer_infos(signed_data: cms.SignedData) -> list[cms.SignerInfo]:
     return [
         signer_info
         for signer_info in signed_data["signer_infos"]
-        if signer_info["signature_algorithm"]["algorithm"].dotted
-        in _GOST_SIGNATURE_ALGORITHM_OIDS
+        if signer_info["signature_algorithm"]["algorithm"].dotted in _GOST_SIGNATURE_ALGORITHM_OIDS
     ]
 
 

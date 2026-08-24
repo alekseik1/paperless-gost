@@ -17,10 +17,7 @@ from paperless_gost.parser import GOSTCMSParser, _entry
 def test_entry_point_is_discoverable() -> None:
     parser_entry_points = entry_points(group="paperless_ngx.parsers")
 
-    assert any(
-        entry_point.value == "paperless_gost.parser:GOSTCMSParser"
-        for entry_point in parser_entry_points
-    )
+    assert any(entry_point.value == "paperless_gost.parser:GOSTCMSParser" for entry_point in parser_entry_points)
 
 
 def test_attached_gost_cms_pdf_scores_parses_and_extracts_metadata(
@@ -197,9 +194,7 @@ def test_thumbnail_uses_extracted_pdf_rendition(
     source = tmp_path / f"source{suffix}"
     pdf = b"%PDF-1.7\nsynthetic document\n%%EOF\n"
     source.write_bytes(
-        _zip({"2024.pdf": pdf, "2024.p7s": _cms(None)})
-        if mime_type == "application/zip"
-        else _cms(pdf),
+        _zip({"2024.pdf": pdf, "2024.p7s": _cms(None)}) if mime_type == "application/zip" else _cms(pdf),
     )
     thumbnail = tmp_path / "thumbnail.webp"
     calls: list[tuple[Path, Path]] = []
@@ -344,9 +339,9 @@ def test_every_supported_gost_digest_oid_is_accepted(
     assert GOSTCMSParser.score("application/pkcs7-mime", source.name, source) == 100
     with GOSTCMSParser() as parser:
         metadata = parser.extract_metadata(source, "application/pkcs7-mime")
-    assert next(
-        entry["value"] for entry in metadata if entry["key"] == "gost_algorithm_oids"
-    ) == ", ".join(sorted([digest_oid, "1.2.643.7.1.1.3.2"]))
+    assert next(entry["value"] for entry in metadata if entry["key"] == "gost_algorithm_oids") == ", ".join(
+        sorted([digest_oid, "1.2.643.7.1.1.3.2"])
+    )
 
 
 @pytest.mark.parametrize(
@@ -535,9 +530,7 @@ def _zip(
 ) -> bytes:
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=compression) as archive:
-        for filename, content in (
-            members.items() if isinstance(members, dict) else members
-        ):
+        for filename, content in members.items() if isinstance(members, dict) else members:
             archive.writestr(filename, content)
     return buffer.getvalue()
 
