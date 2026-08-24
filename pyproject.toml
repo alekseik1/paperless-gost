@@ -1,13 +1,26 @@
 [project]
 name = "paperless-gost"
 version = "0.1.0"
-description = "Add your description here"
+description = "Paperless-ngx parser for attached GOST CMS/CAdES PDF documents"
 readme = "README.md"
 authors = [
     { name = "alekseik1", email = "1alekseik1@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "asn1crypto>=1.5.1",
+]
+
+[project.entry-points."paperless_ngx.parsers"]
+gost_cms = "paperless_gost.parser:GOSTCMSParser"
+
+[dependency-groups]
+dev = [
+    "django~=5.2.13",
+    "pillow>=12.0",
+    "pytest>=9.0",
+    "ruff>=0.14",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

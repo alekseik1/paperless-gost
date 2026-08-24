@@ -1,2 +1,1 @@
-def hello() -> str:
-    return "Hello from paperless-gost!"
+"""Paperless-ngx support for attached GOST CMS/CAdES PDF documents."""
