@@ -92,6 +92,8 @@ class GOSTCMSParser:
             }.get(mime_type)
             if suffixes and filename and not filename.lower().endswith(suffixes):
                 return None
+            if mime_type == "application/zip":
+                return 0
             return 100
         try:
             if mime_type == "application/zip":

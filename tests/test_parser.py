@@ -91,9 +91,6 @@ def test_attached_gost_cms_pdf_scores_parses_and_extracts_metadata(
         ("application/pkcs7-signature", "upload.bin"),
         ("application/x-pkcs7-mime", "upload.bin"),
         ("application/x-pkcs7-signature", "upload.bin"),
-        ("application/zip", "bundle.zip"),
-        ("application/zip", "BUNDLE.ZIP"),
-        ("application/zip", ""),
     ],
 )
 def test_upload_precheck_accepts_potential_gost_cms_uploads(
@@ -101,6 +98,11 @@ def test_upload_precheck_accepts_potential_gost_cms_uploads(
     filename: str,
 ) -> None:
     assert GOSTCMSParser.score(mime_type, filename) == 100
+
+
+@pytest.mark.parametrize("filename", ["bundle.zip", "BUNDLE.ZIP", ""])
+def test_upload_precheck_defers_zip_to_content_check(filename: str) -> None:
+    assert GOSTCMSParser.score("application/zip", filename) == 0
 
 
 def test_upload_precheck_rejects_arbitrary_named_binary() -> None:
@@ -228,6 +230,7 @@ def test_thumbnail_uses_extracted_pdf_rendition(
         "ambiguous_pair",
         "duplicate_p7s",
         "cross_directory_stem",
+        "p7m_instead_of_p7s",
     ],
 )
 def test_invalid_or_ambiguous_gost_zip_is_not_claimed(
@@ -262,7 +265,24 @@ def test_invalid_or_ambiguous_gost_zip_is_not_claimed(
         ]
     elif case == "cross_directory_stem":
         members = {"a/2024.pdf": pdf, "b/2024.p7s": _cms(None)}
+    elif case == "p7m_instead_of_p7s":
+        members = {"2024.pdf": pdf, "2024.p7m": _cms(pdf)}
     source.write_bytes(_zip(members))
+
+    assert GOSTCMSParser.score("application/zip", source.name, source) is None
+
+
+@pytest.mark.parametrize("suffix", [".edoc", ".asice", ".bdoc", ".adoc"])
+def test_asic_e_style_zip_is_not_claimed(tmp_path: Path, suffix: str) -> None:
+    source = tmp_path / f"document{suffix}"
+    source.write_bytes(
+        _zip(
+            {
+                "document.pdf": b"%PDF-1.7\n%%EOF\n",
+                "mimetype": b"application/vnd.etsi.asic-e+zip",
+            },
+        ),
+    )
 
     assert GOSTCMSParser.score("application/zip", source.name, source) is None
 
