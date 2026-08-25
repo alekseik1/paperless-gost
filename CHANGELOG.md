@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.1.2 (2026-08-25)
+
+### Bug Fixes
+
+- Less aggressive zip matching
+  ([`39a97fe`](https://github.com/alekseik1/paperless-gost/commit/39a97fe3c5687adbc304d9c814c3a98c6f70e6c2))
+
+
 ## v0.1.1 (2026-08-25)
 
 ### Bug Fixes
