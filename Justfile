@@ -26,3 +26,4 @@ release:
     uv run semantic-release version
 
 ci: lint typecheck test build
+
